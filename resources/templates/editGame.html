@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<body>
+<form action="/editGame" method="post">
+    <input type="hidden" placeholder="{{id}}" name="editGameId"/>
+    <input type="text" placeholder="Edit Name" name="editGameName"/>
+    <select name="editGameGenre">
+        <option selected disabled>Genre</option>
+        <option value="adventure">Adventure</option>
+        <option value="rpg">RPG</option>
+        <option value="strategy">Strategy</option>
+        <option value="shooter">Shooter</option>
+    </select>
+    <select name="editGamePlatform">
+        <option selected disabled>Platform</option>
+        <option value="pc">PC</option>
+        <option value="ps4">PS4</option>
+        <option value="xbone">XBox One</option>
+        <option value="wiiu">Wii U</option>
+    </select>
+    <input type="number" placeholder="Edit Release Year" name="editGameYear"/>
+    <button type="submit">Edit Game</button>
+</form>
+</body>
+</html>
