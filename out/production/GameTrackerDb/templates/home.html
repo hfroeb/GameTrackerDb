@@ -1,5 +1,7 @@
 <html>
 <body>
+
+<h2>Hello, {{userName}}!</h2>
 <form action="/logout" method="post">
     <button type="submit">Logout</button>
 </form>
@@ -23,10 +25,14 @@
     <input type="number" placeholder="Release Year" name="gameYear"/>
     <button type="submit">Submit</button>
 </form>
-
+<h1>Game Tracker</h1>
 <ol>
-    {{#games}}
-    <li>{{name}} - {{genre}} - {{platform}} - {{releaseYear}}</li>
+{{#games}}
+
+    <li><h2>{{name}}</h2>
+        <br> Genre: {{genre}}
+        <br> Platform: {{platform}}
+        <br> Year: {{releaseYear}}
     <form action="/delete-game" method="post">
         <input type="hidden" value="{{id}}" name="deleteIdNum"/>
         <button type="submit">Delete Game</button>
@@ -35,10 +41,8 @@
         <input type="hidden" value="{{id}}" name="editGameId"/>
         <button type="submit">Edit Game</button>
     </form>
-    {{/games}}
+    </li>
+{{/games}}
 </ol>
-<br>
-
-<br>
 </body>
 </html>

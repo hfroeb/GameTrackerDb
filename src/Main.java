@@ -1,6 +1,7 @@
 /**
  * Created by halleyfroeb on 9/27/16.
  */
+
 import org.h2.tools.Server;
 import spark.ModelAndView;
 import spark.Session;
@@ -13,189 +14,222 @@ import java.util.HashMap;
 
 public class Main {
 
-    static HashMap<String, User> users = new HashMap<>();
+    public static void createTables(Connection conn) throws SQLException {
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE IF NOT EXISTS games1 (id IDENTITY, name VARCHAR, genre VARCHAR, platform VARCHAR, releaseYear INT, author VARCHAR)");
+        stmt.execute("CREATE TABLE IF NOT EXISTS users (userId IDENTITY, userName VARCHAR)");
+    }
 
     public static void main(String[] args) throws SQLException {
 
-        // Game(int id, String name, String genre, String platform, int releaseYear)
-
         Server.createWebServer().start();
         Connection conn = DriverManager.getConnection("jdbc:h2:./main");
-        Statement stmt = conn.createStatement();
-        stmt.execute("CREATE TABLE IF NOT EXISTS games (id IDENTITY, name VARCHAR, genre VARCHAR, platform VARCHAR, releaseYear INT)");
+        createTables(conn);
 
         Spark.init();
         Spark.get(
                 "/",
-                ((request, response) -> {
-                    User user = getUserFromSession(request.session());
-
+                (request, response) -> {
                     HashMap m = new HashMap<>();
-                    if (user == null) {
+                    Session session = request.session();
+                    String userName = session.attribute("userName");
+                    String author = userName;
+                    if (userName == null) {
                         return new ModelAndView(m, "login.html");
                     }
-                    else {
-                       // selectGames(conn);
-                        user.games = selectGames(conn);
-                        return new ModelAndView(user, "home.html");
+                    HashMap p = new HashMap<>();
+                    ArrayList<User> users = selectUsers(conn);
+                    if (users.contains(userName)) {
+                        User user = selectUser(conn, userName);
+                        p.put("user", user);
+                    } else {
+                        insertUser(conn, userName);
+                        User user = selectUser(conn, userName);
+                        p.put("user", user);
                     }
-                }),
+                    ArrayList<Game> games = selectGames(conn, author);
+                    m.put("userName", userName);
+                    p.put("games", games);
+                    return new ModelAndView(p, "home.html");
+                },
                 new MustacheTemplateEngine()
         );
-
         Spark.post(
                 "/create-user",
-                ((request, response) -> {
-                    String name = request.queryParams("loginName");
-                    User user = users.get(name);
-                    if (user == null) {
-                        user = new User(name);
-                        users.put(name, user);
-                    }
-
+                (request, response) -> {
+                    String userName = request.queryParams("loginName");
                     Session session = request.session();
-                    session.attribute("userName", name);
-
+                    session.attribute("userName", userName);
                     response.redirect("/");
                     return "";
-                })
+                }
         );
         Spark.post(
                 "/create-game",
-                ((request, response) -> {
-                    User user = getUserFromSession(request.session());
-                    if (user == null) {
-                        //throw new Exception("User is not logged in");
-                        Spark.halt(403);
-                    }
+                (request, response) -> {
                     String gameName = request.queryParams("gameName");
                     String gameGenre = request.queryParams("gameGenre");
                     String gamePlatform = request.queryParams("gamePlatform");
                     int gameYear = Integer.valueOf(request.queryParams("gameYear"));
-
-                   // Game game = new Game(gameName, gameGenre, gamePlatform, gameYear);
-                 //   user.games.add(game);
-
-                    insertGame(conn, gameName, gameGenre, gamePlatform, gameYear);
-
+                    Session session = request.session();
+                    String author = session.attribute("userName");
+                    insertGame(conn, gameName, gameGenre, gamePlatform, gameYear, author);
                     response.redirect("/");
                     return "";
-                })
+                }
         );
         Spark.post(
                 "/logout",
-                ((request, response) -> {
+                (request, response) -> {
                     Session session = request.session();
                     session.invalidate();
                     response.redirect("/");
                     return "";
-                })
+                }
         );
         Spark.post(
                 "/delete-game",
-                ((request, response) -> {
-                    Session session = request.session();
-                    String name = session.attribute("userName");
+                (request, response) -> {
                     int id = Integer.parseInt(request.queryParams("deleteIdNum"));
-                    User user = users.get(name);
-                    user.games.remove(id);// DELETE global array? need this?
                     deleteGame(conn, id);
                     response.redirect("/");
                     return "";
-                }));
+                });
 
         Spark.get(
                 "/editGame",
-                ((request, response) -> {
+                (request, response) -> {
                     HashMap m = new HashMap();
                     Session session = request.session();
-                    String name = session.attribute("userName");
                     int id = session.attribute("editGameId");
-                    User user = users.get(name);
-                    Game game = user.games.get(id);
+//                    int id = Integer.parseInt(request.queryParams("editGameId"));
+                    Game game = selectGame(conn, id);
                     m.put("game", game);
                     m.put("id", id);
                     return new ModelAndView(m, "editGame.html");
-                }),
+                },
                 new MustacheTemplateEngine()
         );
         Spark.post(
                 "/editGame", // page to edit game
-                ((request, response) -> {
+                (request, response) -> {
                     Session session = request.session();
-                    String name = session.attribute("userName");
                     int editId = session.attribute("editGameId");
-                    User user = users.get(name);
-                    Game game = user.games.get(editId);
-
                     String editName = request.queryParams("editGameName");
                     String editGenre = request.queryParams("editGameGenre");
                     String editPlatform = request.queryParams("editGamePlatform");
                     int editReleaseYear = Integer.parseInt(request.queryParams("editGameYear"));
-
-                    updateGame(conn, editId, editName, editGenre, editPlatform, editReleaseYear);
-
+                    String author = session.attribute("userName");
+                    updateGame(conn, editId, editName, editGenre, editPlatform, editReleaseYear, author);
                     response.redirect("/");
                     return "";
-                })
+                }
         );
         Spark.post( //button to edit page
                 "/edit-game",
-                ((request, response) -> {
+                (request, response) -> {
+                    int id = Integer.parseInt(request.queryParams("editGameId"));
                     Session session = request.session();
-                    String name = session.attribute("userName");
-                    User user = users.get(name);
-                    int editId = Integer.parseInt(request.queryParams("editGameId"));
-                    Game game = user.games.get(editId);
-                    session.attribute("editGameId", editId);
+                    session.attribute("editGameId", id);
                     response.redirect("/editGame");
                     return "";
-                }));
+                });
 
     }
-    public static void insertGame(Connection conn, String name, String genre, String platform, int releaseYear ) throws SQLException {
-        PreparedStatement stmt = conn.prepareStatement("INSERT INTO games VALUES (NULL, ?, ?, ?, ?)");
+
+    // User Functions
+
+    public static void insertUser(Connection conn, String userName) throws SQLException {
+        PreparedStatement stmt = conn.prepareStatement("INSERT INTO users VALUES (NULL, ?)");
+        stmt.setString(1, userName);
+        stmt.execute();
+    }
+
+    public static User selectUser(Connection conn, String userName) throws SQLException {
+        PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE userName = ?");
+        stmt.setString(1, userName);
+        ResultSet results = stmt.executeQuery();
+        if (results.next()) {
+            int id = results.getInt("userId");
+            return new User(id, userName);
+        }
+        return null;
+    }
+
+    public static ArrayList<User> selectUsers(Connection conn) throws SQLException {
+        ArrayList<User> users = new ArrayList<>();
+        Statement stmt = conn.createStatement();
+        ResultSet results = stmt.executeQuery("SELECT * FROM users");
+        while (results.next()) {
+            int userId = results.getInt("userId");
+            String userName = results.getString("userName");
+            users.add(new User(userId, userName));
+        }
+        return users;
+    }
+
+    // Game Functions
+
+    public static void insertGame(Connection conn, String name, String genre, String platform, int releaseYear, String author) throws SQLException {
+        PreparedStatement stmt = conn.prepareStatement("INSERT INTO games1 VALUES (NULL, ?, ?, ?, ?, ?)");
         stmt.setString(1, name);
         stmt.setString(2, genre);
         stmt.setString(3, platform);
         stmt.setInt(4, releaseYear);
+        stmt.setString(5, author);
         stmt.execute();
     }
 
-    public static ArrayList<Game> selectGames(Connection conn) throws SQLException{
-        ArrayList<Game> games = new ArrayList<>(); //remove (GLOBAL)?
-        Statement stmt = conn.createStatement();
-        ResultSet results = stmt.executeQuery("SELECT * FROM games");
-        while(results.next()){
+    public static ArrayList<Game> selectGames(Connection conn, String author) throws SQLException {
+        ArrayList<Game> games = new ArrayList<>();
+        PreparedStatement stmt = conn.prepareStatement("SELECT * FROM games1 INNER JOIN users ON userName = author WHERE author = ?");
+        stmt.setString(1, author);
+        ResultSet results = stmt.executeQuery();
+        while (results.next()) {
             int id = results.getInt("id");
             String name = results.getString("name");
             String genre = results.getString("genre");
             String platform = results.getString("platform");
             int releaseYear = results.getInt("releaseYear");
-            games.add(new Game(id, name, genre, platform, releaseYear));
+            Game game = new Game(id, name, genre, platform, releaseYear, author);
+            if (!games.contains(game)){
+                games.add(game);
+            }
         }
         return games;
     }
 
-    public static void deleteGame(Connection conn, int id)throws SQLException{
-        PreparedStatement stmt = conn.prepareStatement("DELETE games WHERE id = ?");
+    public static void deleteGame(Connection conn, int id) throws SQLException {
+        PreparedStatement stmt = conn.prepareStatement("DELETE games1 WHERE id = ?");
         stmt.setInt(1, id);
         stmt.execute();
     }
-    public static void updateGame(Connection conn, int editId, String editName, String editGenre, String editPlatform, int editReleaseYear)throws SQLException{
+
+    public static void updateGame(Connection conn, int editId, String editName, String editGenre, String editPlatform, int editReleaseYear, String editAuthor) throws SQLException {
         PreparedStatement stmt = conn.prepareStatement
-                ("UPDATE games SET name = ?, genre = ?, platform = ?, releaseYear = ? WHERE id = ?");
+                ("UPDATE games1 SET name = ?, genre = ?, platform = ?, releaseYear = ?, author = ? WHERE id = ?");
         stmt.setString(1, editName);
         stmt.setString(2, editGenre);
         stmt.setString(3, editPlatform);
         stmt.setInt(4, editReleaseYear);
-        stmt.setInt(5, editId);
+        stmt.setString(5, editAuthor);
+        stmt.setInt(6, editId);
         stmt.execute();
     }
 
-
-    static User getUserFromSession(Session session) {
-        String name = session.attribute("userName");
-        return users.get(name);
+    public static Game selectGame(Connection conn, int id) throws SQLException {
+        PreparedStatement stmt = conn.prepareStatement
+                ("SELECT * FROM games1 WHERE id = ?");
+        stmt.setInt(1, id);
+        ResultSet results = stmt.executeQuery();
+        if (results.next()) {
+            String name = results.getString("name");
+            String genre = results.getString("genre");
+            String platform = results.getString("platform");
+            int releaseYear = results.getInt("releaseYear");
+            String author = results.getString("author");
+            return new Game(id, name, genre, platform, releaseYear, author);
+        }
+        return null;
     }
 }
