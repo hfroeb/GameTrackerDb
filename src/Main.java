@@ -38,16 +38,13 @@ public class Main {
                         return new ModelAndView(m, "login.html");
                     }
                     HashMap p = new HashMap<>();
-                    ArrayList<User> users = selectUsers(conn);
-                    if (users.contains(userName)) {
-                        User user = selectUser(conn, userName);
-                        p.put("user", user);
-                    } else {
+                    User user = selectUser(conn, userName);
+                    if (user == null) {
                         insertUser(conn, userName);
-                        User user = selectUser(conn, userName);
-                        p.put("user", user);
+                        user = selectUser(conn, userName);
                     }
                     ArrayList<Game> games = selectGames(conn, author);
+                    p.put("user", user);
                     m.put("userName", userName);
                     p.put("games", games);
                     return new ModelAndView(p, "home.html");
